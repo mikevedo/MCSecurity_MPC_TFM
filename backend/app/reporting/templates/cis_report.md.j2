@@ -1,0 +1,83 @@
+# CIS Security Audit Report
+
+**Provider**: {{ summary.provider.value | upper }}
+**Cloud Account**: {{ summary.cloud_account_id }}
+**Benchmark**: {{ policy.benchmark.value }}
+**Generated**: {{ summary.scan_time if summary.scan_time is defined else summary.started_at }}
+
+---
+
+## Executive Summary
+
+{{ narrative.executive_summary }}
+
+---
+
+## Scan Overview
+
+| Metric | Value |
+|--------|-------|
+| Total Checks | {{ summary.total }} |
+| Passed | {{ summary.passed }} |
+| Failed | {{ summary.failed }} |
+| Pass Rate | {{ "%.1f" | format(summary.passed / summary.total * 100) if summary.total > 0 else "0.0" }}% |
+
+### Severity Breakdown (Failed)
+{% if summary.severity_breakdown %}
+{% for severity, count in summary.severity_breakdown.items() %}
+- **{{ severity }}**: {{ count }}
+{% endfor %}
+{% else %}
+- No severity breakdown available.
+{% endif %}
+
+---
+
+## Key Risks
+{% if narrative.key_risks %}
+{% for risk in narrative.key_risks %}
+- {{ risk }}
+{% endfor %}
+{% else %}
+- No key risks identified.
+{% endif %}
+
+---
+
+## Remediation Priorities
+{% if narrative.remediation_priorities %}
+{% for item in narrative.remediation_priorities %}
+{{ loop.index }}. {{ item }}
+{% endfor %}
+{% else %}
+No immediate remediation actions required.
+{% endif %}
+
+---
+
+## Findings Detail
+{% if findings %}
+{% for finding in findings %}
+### {{ loop.index }}. {{ finding.title }}
+
+- **Status**: {{ finding.status.value }}
+- **Severity**: {{ finding.severity.value }}
+- **Resource**: {{ finding.resource_id }} ({{ finding.resource_type }})
+- **Region**: {{ finding.region }}
+- **Description**: {{ finding.description }}
+- **Risk**: {{ finding.risk }}
+- **Remediation**: {{ finding.remediation }}
+{% if finding.compliance %}
+- **Compliance Controls**:
+{% for framework, controls in finding.compliance.items() %}
+  - {{ framework }}: {{ controls | join(", ") }}
+{% endfor %}
+{% endif %}
+
+---
+{% endfor %}
+{% else %}
+*No findings to display.*
+
+---
+{% endif %}

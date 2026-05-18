@@ -1,0 +1,66 @@
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Build artifacts
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checking
+.mypy_cache/
+
+# Ruff/lint
+.ruff_cache/
+
+# Logs
+*.log
+
+# Runtime artifacts
+backend/app/artifacts/raw/*
+backend/app/artifacts/normalized/*
+backend/app/artifacts/reports/*
+backend/app/artifacts/selected/*
+
+# Claude Code / Gentle AI internal tooling
+.atl/
+.gga
+openspec/
+.claude/
+CLAUDE.md
+
+# Raw Prowler scan outputs (may contain real cloud account data)
+example_outputs/
+
+# Prowler raw scan reports (may contain real cloud account data)
+*.ocsf.json
+*_cis_*.csv
+
+# Keep folders
+!backend/app/artifacts/raw/.gitkeep
+!backend/app/artifacts/normalized/.gitkeep
+!backend/app/artifacts/reports/.gitkeep
+!backend/app/artifacts/selected/.gitkeep
