@@ -174,8 +174,6 @@ def _run_live_mode(
             "--output-filename",
             scan_id,
         ]
-        if cloud_account_id:
-            cmd += ["--account", cloud_account_id]
         if checks:
             # --checks mode: --compliance, --service, --excluded-checks are incompatible
             cmd += ["--checks"] + checks
