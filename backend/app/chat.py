@@ -37,8 +37,7 @@ from typing import Any, Optional
 import yaml
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_ollama import ChatOllama
-# from langchain_anthropic import ChatAnthropic
+from langchain_anthropic import ChatAnthropic
 from backend.app.agents.react_chat_agent import ask_react_agent, build_react_agent
 
 from backend.app.poc_contracts import (
@@ -1960,13 +1959,8 @@ def main() -> None:
 
     try:
         graph = build_graph()
-        # Option A — Local LLM via Ollama (no API key needed)
-        llm_chat = ChatOllama(model="qwen2.5-coder:14b", temperature=0)
-        llm_json = ChatOllama(model="qwen2.5-coder:14b", format="json", temperature=0)
-
-        # Option B — Claude via Anthropic API (requires ANTHROPIC_API_KEY env var)
-        # llm_chat = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
-        # llm_json = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
+        llm_chat = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
+        llm_json = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
     except Exception as exc:  # noqa: BLE001
         print(f"Error al inicializar: {exc}", file=sys.stderr)
         sys.exit(1)

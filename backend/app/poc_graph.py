@@ -32,8 +32,7 @@ from __future__ import annotations
 import os
 from typing import Any, Optional
 
-from langchain_ollama import ChatOllama
-# from langchain_anthropic import ChatAnthropic
+from langchain_anthropic import ChatAnthropic
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
@@ -234,11 +233,7 @@ def build_graph(llm: Any = None):
         CompiledStateGraph ready for ainvoke().
     """
     if llm is None:
-        # Option A — Local LLM via Ollama (no API key needed)
-        llm = ChatOllama(model="qwen2.5-coder:14b", format="json", temperature=0)
-
-        # Option B — Claude via Anthropic API (requires ANTHROPIC_API_KEY env var)
-        # llm = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
+        llm = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
 
     # ----------------------------------------------------------------
     # LLM injection wrapper: prepend llm into state before the first node
