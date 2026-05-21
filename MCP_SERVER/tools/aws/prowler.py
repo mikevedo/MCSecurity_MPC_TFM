@@ -279,7 +279,7 @@ def _run_live_mode(
 
 def run_prowler_scan(
     cloud_account_id: str = "",
-    benchmark: str = "cis_3.0_aws",
+    benchmark: str = "cis_aws_foundations_benchmark_v3.0",
     output_format: str = "json-ocsf",
     role_arn: str = "",
     services: list[str] | None = None,
