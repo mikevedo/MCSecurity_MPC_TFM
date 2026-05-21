@@ -55,6 +55,9 @@ CLAUDE.md
 # Raw Prowler scan outputs (may contain real cloud account data)
 example_outputs/
 
+# Scan output directory (real cloud data)
+output/
+
 # Prowler raw scan reports (may contain real cloud account data)
 *.ocsf.json
 *_cis_*.csv

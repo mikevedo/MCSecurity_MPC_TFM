@@ -20,6 +20,8 @@ from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from datetime import datetime, timezone
+
 from backend.app.poc_contracts import NormalizedFindings, ReportPolicy
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -62,6 +64,41 @@ def render(
         narrative=narrative,
         findings=findings.security_findings,
         compliance=findings.compliance_checks,
+    )
+
+
+def render_multicloud(
+    findings_list: list[NormalizedFindings],
+    policies: list[ReportPolicy],
+    template_name: str = "multi_cloud_report.md.j2",
+) -> str:
+    """
+    Render a unified multi-cloud Markdown report from multiple NormalizedFindings.
+
+    Each entry in findings_list corresponds to one cloud account scan.
+    The report is organized by account with a global summary table.
+
+    Args:
+        findings_list: One NormalizedFindings per scanned account.
+        policies:      Corresponding ReportPolicy per account (same order).
+        template_name: Jinja2 template filename.
+
+    Returns:
+        Rendered Markdown string. Does NOT write to disk (RPT-4).
+    """
+    env = _make_env()
+    template = env.get_template(template_name)
+    accounts = [
+        {"summary": nf.summary, "policy": p, "findings": nf.security_findings, "compliance": nf.compliance_checks}
+        for nf, p in zip(findings_list, policies)
+    ]
+    return template.render(
+        accounts=accounts,
+        generated_at=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        total_accounts=len(accounts),
+        grand_total=sum(nf.summary.total for nf in findings_list),
+        grand_failed=sum(nf.summary.failed for nf in findings_list),
+        grand_passed=sum(nf.summary.passed for nf in findings_list),
     )
 
 

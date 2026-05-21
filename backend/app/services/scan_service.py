@@ -137,6 +137,28 @@ class ScanService:
             "cloud_account_id": request.cloud_account_id,
             "output_format": request.output_format,
         }
+        if request.checks:
+            args["checks"] = request.checks
+        elif request.services:
+            args["services"] = request.services
+        if request.severity_filter:
+            args["severity_filter"] = request.severity_filter
+        if request.only_failed:
+            args["only_failed"] = True
+        if request.resource_group:
+            args["resource_group"] = request.resource_group
+        if request.azure_region:
+            args["azure_region"] = request.azure_region
+        if request.aws_region:
+            args["aws_region"] = request.aws_region
+        if request.role_arn:
+            args["role_arn"] = request.role_arn
+        if request.excluded_checks:
+            args["excluded_checks"] = request.excluded_checks
+        if request.categories:
+            args["categories"] = request.categories
+        if request.mutelist_file:
+            args["mutelist_file"] = request.mutelist_file
         if request.fixture_mode and request.fixture_path:
             args["fixture_path"] = request.fixture_path
         return args

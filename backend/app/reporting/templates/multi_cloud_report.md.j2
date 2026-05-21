@@ -1,0 +1,60 @@
+# Multi-Cloud Security Audit Report
+
+**Generated**: {{ generated_at }}
+**Accounts scanned**: {{ total_accounts }}
+
+---
+
+## Global Summary
+
+| Provider | Account | Benchmark | Total | Failed | Passed | Pass Rate |
+|----------|---------|-----------|-------|--------|--------|-----------|
+{% for account in accounts %}
+| {{ account.summary.provider.value | upper }} | {{ account.summary.cloud_account_id }} | {{ account.policy.benchmark.value }} | {{ account.summary.total }} | {{ account.summary.failed }} | {{ account.summary.passed }} | {{ "%.1f" | format(account.summary.passed / account.summary.total * 100) if account.summary.total > 0 else "0.0" }}% |
+{% endfor %}
+| **TOTAL** | | | **{{ grand_total }}** | **{{ grand_failed }}** | **{{ grand_passed }}** | {{ "%.1f" | format(grand_passed / grand_total * 100) if grand_total > 0 else "0.0" }}% |
+
+---
+{% for account in accounts %}
+
+## {{ account.summary.provider.value | upper }} — {{ account.summary.cloud_account_id }}
+
+**Benchmark**: {{ account.policy.benchmark.value }}
+**Findings**: {{ account.summary.total }} total — {{ account.summary.failed }} failed, {{ account.summary.passed }} passed
+
+### Severity Breakdown
+{% if account.summary.severity_breakdown %}
+{% for severity, count in account.summary.severity_breakdown.items() %}
+- **{{ severity }}**: {{ count }}
+{% endfor %}
+{% else %}
+- No severity breakdown available.
+{% endif %}
+
+### Findings
+{% if account.findings %}
+{% for finding in account.findings %}
+#### {{ loop.index }}. {{ finding.title }}
+
+- **Status**: {{ finding.status.value }}
+- **Severity**: {{ finding.severity.value }}
+- **Resource**: {{ finding.resource_id }} ({{ finding.resource_type }})
+- **Region**: {{ finding.region }}
+- **Description**: {{ finding.description }}
+- **Risk**: {{ finding.risk }}
+- **Remediation**: {{ finding.remediation }}
+{% if finding.compliance %}
+- **Compliance Controls**:
+{% for framework, controls in finding.compliance.items() %}
+  - {{ framework }}: {{ controls | join(", ") }}
+{% endfor %}
+{% endif %}
+
+---
+{% endfor %}
+{% else %}
+*No findings for this account.*
+
+---
+{% endif %}
+{% endfor %}

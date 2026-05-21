@@ -223,7 +223,7 @@ class TestInterpretRequest:
 
         valid_scan_request_dict = {
             "provider": "azure",
-            "benchmark": "cis_azure_foundations_benchmark_v2.0",
+            "benchmark": "cis_2.0_azure",
             "cloud_account_id": "sub-abc",
             "fixture_mode": True,
             "fixture_path": "tests/fixtures/prowler_azure_sample.json",
@@ -250,7 +250,7 @@ class TestInterpretRequest:
 
         valid_dict = {
             "provider": "azure",
-            "benchmark": "cis_azure_foundations_benchmark_v2.0",
+            "benchmark": "cis_2.0_azure",
             "cloud_account_id": "sub-retry",
             "fixture_mode": False,
             "fixture_path": None,
@@ -288,7 +288,7 @@ class TestBuildPolicy:
         valid_policy_dict = {
             "title": "CIS Azure L1",
             "audience": "Security Team",
-            "benchmark": "cis_azure_foundations_benchmark_v2.0",
+            "benchmark": "cis_2.0_azure",
             "filter": {"only_failed": True},
             "include_remediation": True,
             "include_compliance_overview": True,

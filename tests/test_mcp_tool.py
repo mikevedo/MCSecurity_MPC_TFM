@@ -317,3 +317,146 @@ class TestDispatchRoutes:
 
         assert result["status"] == "error"
         assert "gcp" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# Severity filter and only_failed flag — Azure tool
+# ---------------------------------------------------------------------------
+
+class TestSeverityAndStatusFlagsAzure:
+    """--severity and --status FAIL must be injected into the Prowler subprocess command."""
+
+    def _make_proc(self, returncode: int = 0, stdout: str = "[]") -> MagicMock:
+        proc = MagicMock()
+        proc.returncode = returncode
+        proc.stdout = stdout
+        proc.stderr = ""
+        return proc
+
+    def test_severity_filter_added_to_cmd(self, monkeypatch):
+        """severity_filter=['critical','high'] → --severity critical high in cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.azure.prowler as prowler_mod
+            importlib.reload(prowler_mod)
+
+            prowler_mod.run_prowler_scan(
+                cloud_account_id="sub-123",
+                severity_filter=["critical", "high"],
+            )
+
+        cmd = mock_run.call_args[0][0]
+        assert "--severity" in cmd
+        sev_idx = cmd.index("--severity")
+        assert cmd[sev_idx + 1] == "critical"
+        assert cmd[sev_idx + 2] == "high"
+
+    def test_only_failed_adds_status_fail(self, monkeypatch):
+        """only_failed=True → --status FAIL in cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.azure.prowler as prowler_mod
+            importlib.reload(prowler_mod)
+
+            prowler_mod.run_prowler_scan(
+                cloud_account_id="sub-123",
+                only_failed=True,
+            )
+
+        cmd = mock_run.call_args[0][0]
+        assert "--status" in cmd
+        status_idx = cmd.index("--status")
+        assert cmd[status_idx + 1] == "FAIL"
+
+    def test_no_severity_filter_omits_flag(self, monkeypatch):
+        """When severity_filter=[] (default), --severity must NOT appear in cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.azure.prowler as prowler_mod
+            importlib.reload(prowler_mod)
+
+            prowler_mod.run_prowler_scan(cloud_account_id="sub-123")
+
+        cmd = mock_run.call_args[0][0]
+        assert "--severity" not in cmd
+        assert "--status" not in cmd
+
+
+# ---------------------------------------------------------------------------
+# Resource group and Azure region flags — Azure tool
+# ---------------------------------------------------------------------------
+
+class TestAzureScopeFlags:
+    """--resource-group and --azure-region must be injected into the subprocess command."""
+
+    def _make_proc(self, returncode: int = 0, stdout: str = "[]") -> MagicMock:
+        proc = MagicMock()
+        proc.returncode = returncode
+        proc.stdout = stdout
+        proc.stderr = ""
+        return proc
+
+    def test_resource_group_added_to_cmd(self, monkeypatch):
+        """resource_group='prod' → --resource-group prod in cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.azure.prowler as prowler_mod
+            importlib.reload(prowler_mod)
+
+            prowler_mod.run_prowler_scan(
+                cloud_account_id="sub-123",
+                resource_group="prod",
+            )
+
+        cmd = mock_run.call_args[0][0]
+        assert "--resource-group" in cmd
+        rg_idx = cmd.index("--resource-group")
+        assert cmd[rg_idx + 1] == "prod"
+
+    def test_azure_region_added_to_cmd(self, monkeypatch):
+        """azure_region='westeurope' → --azure-region westeurope in cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.azure.prowler as prowler_mod
+            importlib.reload(prowler_mod)
+
+            prowler_mod.run_prowler_scan(
+                cloud_account_id="sub-123",
+                azure_region="westeurope",
+            )
+
+        cmd = mock_run.call_args[0][0]
+        assert "--azure-region" in cmd
+        region_idx = cmd.index("--azure-region")
+        assert cmd[region_idx + 1] == "westeurope"
+
+    def test_no_scope_flags_omitted_by_default(self, monkeypatch):
+        """Default (no resource_group, no azure_region) → flags absent from cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.azure.prowler as prowler_mod
+            importlib.reload(prowler_mod)
+
+            prowler_mod.run_prowler_scan(cloud_account_id="sub-123")
+
+        cmd = mock_run.call_args[0][0]
+        assert "--resource-group" not in cmd
+        assert "--azure-region" not in cmd

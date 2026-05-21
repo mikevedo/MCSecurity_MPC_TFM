@@ -33,9 +33,7 @@ import os
 from typing import Any, Optional
 
 from langchain_ollama import ChatOllama
-
-# To use Claude via Anthropic API instead of Ollama, uncomment:
-# from langchain_anthropic import ChatAnthropic  # uv add langchain-anthropic
+# from langchain_anthropic import ChatAnthropic
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
@@ -75,6 +73,7 @@ class GraphState(TypedDict, total=False):
     filtered_findings: Optional[NormalizedFindings]  # alias used by doc_agent
     narrative: Optional[dict]
     report_path: Optional[str]
+    skip_render: bool
     error: Optional[str]
 
 
@@ -177,6 +176,9 @@ def render_report(state: GraphState) -> GraphState:
     if filtered is None:
         return {**state, "error": "render_report: filtered_findings not set"}  # type: ignore[return-value]
 
+    if state.get("skip_render"):
+        return {**state, "report_path": None}  # type: ignore[return-value]
+
     try:
         content = render(
             findings=filtered,
@@ -253,13 +255,21 @@ def build_graph(llm: Any = None):
     builder.add_node("execute_scan", execute_scan)
     builder.add_node("normalize_findings", normalize_findings)
     builder.add_node("filter_findings", filter_findings)
-    builder.add_node("generate_narrative", _generate_narrative)
     builder.add_node("render_report", render_report)
     builder.add_node("error_handler", error_handler)
 
-    # Entry edge
+    # Entry edge — skip LLM interpretation nodes when wizard pre-built the state
+    def _route_after_inject(state: GraphState) -> str:
+        if state.get("scan_request") is not None:
+            return "execute_scan"
+        return "interpret_request"
+
     builder.add_edge(START, "inject_llm")
-    builder.add_edge("inject_llm", "interpret_request")
+    builder.add_conditional_edges(
+        "inject_llm",
+        _route_after_inject,
+        {"interpret_request": "interpret_request", "execute_scan": "execute_scan"},
+    )
 
     # After each node: check for error, route to error_handler or continue
     def _make_conditional(next_node: str):
@@ -291,11 +301,6 @@ def build_graph(llm: Any = None):
     )
     builder.add_conditional_edges(
         "filter_findings",
-        _make_conditional("generate_narrative"),
-        {"error_handler": "error_handler", "generate_narrative": "generate_narrative"},
-    )
-    builder.add_conditional_edges(
-        "generate_narrative",
         _make_conditional("render_report"),
         {"error_handler": "error_handler", "render_report": "render_report"},
     )

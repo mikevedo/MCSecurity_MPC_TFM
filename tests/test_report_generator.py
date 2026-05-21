@@ -223,7 +223,7 @@ class TestRenderHappyPath:
             policy=_make_policy(),
             narrative=_make_narrative(),
         )
-        assert "cis_azure_foundations_benchmark_v2.0" in result
+        assert "cis_2.0_azure" in result
 
 
 # ---------------------------------------------------------------------------

@@ -236,7 +236,15 @@ def apply_filter(
             if f.resource_type.lower() in resource_type_set
         ]
 
-    # --- 6. max_findings truncation ---
+    # --- 6. services (check_id prefix match) ---
+    if criteria.services:
+        prefixes = tuple(s.lower() + "_" for s in criteria.services)
+        findings = [
+            f for f in findings
+            if f.check_id.lower().startswith(prefixes)
+        ]
+
+    # --- 7. max_findings truncation ---
     if max_findings is not None and len(findings) > max_findings:
         findings = findings[:max_findings]
 

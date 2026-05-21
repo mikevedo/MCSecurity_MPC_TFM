@@ -74,7 +74,7 @@ def _build_mock_llm() -> Any:
     """
     scan_request_json = json.dumps({
         "provider": "azure",
-        "benchmark": "cis_azure_foundations_benchmark_v2.0",
+        "benchmark": "cis_2.0_azure",
         "cloud_account_id": SUBSCRIPTION_ID,
         "fixture_mode": True,
         "fixture_path": FIXTURE_PATH,
@@ -82,7 +82,7 @@ def _build_mock_llm() -> Any:
     report_policy_json = json.dumps({
         "title": "CIS Azure Security Audit",
         "audience": "Security Team",
-        "benchmark": "cis_azure_foundations_benchmark_v2.0",
+        "benchmark": "cis_2.0_azure",
         "filter": {
             "only_failed": True,
             "min_severity": None,
@@ -157,7 +157,7 @@ def _build_aws_mock_llm() -> Any:
     """
     scan_request_json = json.dumps({
         "provider": "aws",
-        "benchmark": "cis_aws_foundations_benchmark_v3.0",
+        "benchmark": "cis_3.0_aws",
         "cloud_account_id": AWS_ACCOUNT_ID,
         "fixture_mode": True,
         "fixture_path": AWS_FIXTURE_PATH,
@@ -165,7 +165,7 @@ def _build_aws_mock_llm() -> Any:
     report_policy_json = json.dumps({
         "title": "CIS AWS Security Audit",
         "audience": "Security Team",
-        "benchmark": "cis_aws_foundations_benchmark_v3.0",
+        "benchmark": "cis_3.0_aws",
         "filter": {
             "only_failed": True,
             "min_severity": None,

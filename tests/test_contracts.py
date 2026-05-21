@@ -497,9 +497,9 @@ class TestAWSEnumExpansion:
 
     def test_benchmark_aws_enum_values(self):
         """RENAME-2-2: All three AWS CIS benchmarks must be valid enum members."""
-        assert Benchmark("cis_aws_foundations_benchmark_v1.5") == Benchmark.CIS_1_5_AWS
-        assert Benchmark("cis_aws_foundations_benchmark_v2.0") == Benchmark.CIS_2_0_AWS
-        assert Benchmark("cis_aws_foundations_benchmark_v3.0") == Benchmark.CIS_3_0_AWS
+        assert Benchmark("cis_1.5_aws") == Benchmark.CIS_1_5_AWS
+        assert Benchmark("cis_2.0_aws") == Benchmark.CIS_2_0_AWS
+        assert Benchmark("cis_3.0_aws") == Benchmark.CIS_3_0_AWS
 
     def test_scan_request_accepts_aws_provider_and_benchmark(self):
         """RENAME-2-3: ScanRequest must validate with Provider.AWS and AWS benchmark."""

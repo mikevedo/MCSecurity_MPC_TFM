@@ -35,11 +35,33 @@ class Provider(str, Enum):
 
 
 class Benchmark(str, Enum):
-    CIS_2_0_AZURE = "cis_azure_foundations_benchmark_v2.0"
-    CIS_2_1_AZURE = "cis_azure_foundations_benchmark_v2.1"
-    CIS_1_5_AWS = "cis_aws_foundations_benchmark_v1.5"
-    CIS_2_0_AWS = "cis_aws_foundations_benchmark_v2.0"
-    CIS_3_0_AWS = "cis_aws_foundations_benchmark_v3.0"
+    # Azure — CIS
+    CIS_2_0_AZURE = "cis_2.0_azure"
+    CIS_2_1_AZURE = "cis_2.1_azure"
+    CIS_3_0_AZURE = "cis_3.0_azure"
+    CIS_4_0_AZURE = "cis_4.0_azure"
+    CIS_5_0_AZURE = "cis_5.0_azure"
+    # Azure — other frameworks
+    PCI_4_0_AZURE = "pci_4.0_azure"
+    SOC2_AZURE = "soc2_azure"
+    HIPAA_AZURE = "hipaa_azure"
+    ISO27001_2022_AZURE = "iso27001_2022_azure"
+    NIS2_AZURE = "nis2_azure"
+    MITRE_ATTACK_AZURE = "mitre_attack_azure"
+    # AWS — CIS
+    CIS_1_5_AWS = "cis_1.5_aws"
+    CIS_2_0_AWS = "cis_2.0_aws"
+    CIS_3_0_AWS = "cis_3.0_aws"
+    CIS_4_0_AWS = "cis_4.0_aws"
+    CIS_5_0_AWS = "cis_5.0_aws"
+    CIS_6_0_AWS = "cis_6.0_aws"
+    # AWS — other frameworks
+    SOC2_AWS = "soc2_aws"
+    PCI_4_0_AWS = "pci_4.0_aws"
+    HIPAA_AWS = "hipaa_aws"
+    ISO27001_2022_AWS = "iso27001_2022_aws"
+    NIS2_AWS = "nis2_aws"
+    NIST_800_53_R5_AWS = "nist_800_53_revision_5_aws"
 
 
 class FindingStatus(str, Enum):
@@ -192,6 +214,50 @@ class ScanRequest(BaseModel):
     fixture_path: Optional[str] = Field(
         None, description="Path to fixture file (required if fixture_mode=True)."
     )
+    services: list[str] = Field(
+        default_factory=list,
+        description="Prowler --services filter (e.g. ['iam', 'cloudtrail']). Empty = all services.",
+    )
+    checks: list[str] = Field(
+        default_factory=list,
+        description="Prowler --checks filter (e.g. ['iam_root_mfa_enabled']). Overrides services when set.",
+    )
+    severity_filter: list[str] = Field(
+        default_factory=list,
+        description="Prowler --severity filter (e.g. ['critical', 'high']). Empty = all severities.",
+    )
+    only_failed: bool = Field(
+        False,
+        description="Pass --status FAIL to Prowler to exclude PASS findings at source.",
+    )
+    resource_group: Optional[str] = Field(
+        None,
+        description="Azure resource group filter (Azure only). Maps to --resource-group.",
+    )
+    azure_region: Optional[str] = Field(
+        None,
+        description="Azure region filter (Azure only, e.g. 'westeurope'). Maps to --azure-region.",
+    )
+    aws_region: Optional[str] = Field(
+        None,
+        description="AWS region filter (AWS only, e.g. 'us-east-1'). Maps to --region.",
+    )
+    role_arn: Optional[str] = Field(
+        None,
+        description="IAM role ARN to assume before scanning (AWS only). Empty = ambient credentials.",
+    )
+    excluded_checks: list[str] = Field(
+        default_factory=list,
+        description="Prowler --excluded-checks filter. Check IDs to skip.",
+    )
+    categories: list[str] = Field(
+        default_factory=list,
+        description="Prowler --category filter (e.g. ['software_and_configuration_checks']).",
+    )
+    mutelist_file: Optional[str] = Field(
+        None,
+        description="Path to Prowler mutelist YAML file. Maps to --mutelist-file.",
+    )
 
 
 class ScanResult(BaseModel):
@@ -226,6 +292,10 @@ class FilterCriteria(BaseModel):
     )
     resource_types: list[str] = Field(
         default_factory=list, description="Filter to specific resource types."
+    )
+    services: list[str] = Field(
+        default_factory=list,
+        description="Filter findings to specific Prowler services (e.g. ['iam', 's3']). Matches check_id prefix.",
     )
 
 
