@@ -1,66 +1,75 @@
 # MCP Security Audit PoC
 
-Terminal-based cloud security audit system using MCP, LangGraph, Prowler CLI, and local LLMs.
+Terminal-based cloud security audit system using MCP, LangGraph, Prowler CLI, and Claude (Anthropic API).
 
-A user types a request in the terminal → LangGraph orchestrates agents → Prowler scans Azure or AWS → findings are normalized → a Markdown CIS report is generated.
+Two modes at startup:
+- **Report wizard** — step-by-step CIS compliance report via Prowler (Azure + AWS)
+- **Security chat** — free-form Q&A about your cloud accounts (AWS via boto3, Azure via Prowler)
 
 ---
 
 ## Architecture
 
+### Report wizard flow
+
 ```
-Terminal Chat
+Terminal → Report Wizard (no LLM)
     → LangGraph
-    → CIS Agent (interprets request, filters findings)
+    → CIS Agent (builds scan request + report policy)
     → MCP Client → MCP Server → Prowler CLI → Azure / AWS APIs
-    → Normalizer
+    → Normalizer (OCSF → internal schema)
     → Doc Agent (generates narrative)
     → Jinja2 → Markdown Report
+```
+
+### Chat Q&A flow
+
+```
+Terminal → Security Chat
+    → Intent detection (account question vs. general)
+
+    AWS:  ReAct Agent (Claude) → 6 boto3 domain tools (IAM, S3, EBS, CloudTrail, VPC, EC2)
+                               → direct answer
+
+    Azure: LangGraph → Prowler → Normalizer → Claude → answer
 ```
 
 ---
 
 ## Prerequisites
 
-Install these before setting up the project.
-
 ### 1. Python 3.13
 
 ```bash
-# macOS
 brew install python@3.13
 ```
 
-### 2. uv (package manager)
+### 2. uv
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 3. Prowler CLI (via Homebrew — do NOT use pip/uv add)
+### 3. Anthropic API key
+
+The chat Q&A and report narrative flows use Claude claude-sonnet-4-6.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### 4. Prowler CLI (via Homebrew — do NOT use pip/uv add)
+
+Required for report wizard and Azure chat scans. Not used for AWS chat Q&A.
 
 ```bash
 brew install prowler
-prowler --version  # must be 5.26.1 or later
+prowler --version  # 5.26.1 or later
 ```
 
-> Prowler must be installed as a system tool, not as a Python dependency.
-> The MCP Server calls it as a subprocess — `prowler azure ...`
+> Prowler is invoked as a subprocess by the MCP Server — never directly.
 
-### 4. Ollama + qwen2.5-coder:14b
-
-```bash
-# Install Ollama
-brew install ollama
-
-# Pull the model
-ollama pull qwen2.5-coder:14b
-
-# Start Ollama (keep running in background)
-ollama serve
-```
-
-### 5. Azure CLI (for real Azure scans — skip for fixture mode)
+### 5. Azure CLI (for Azure scans — skip for fixture mode)
 
 ```bash
 brew install azure-cli
@@ -70,25 +79,22 @@ az account set --subscription <your-subscription-id>
 
 > The signed-in user needs **Reader** role on the target subscription.
 
-### 6. AWS CLI (for real AWS scans — skip for fixture mode)
+### 6. AWS CLI (for AWS report scans — skip for fixture mode or AWS chat)
 
 ```bash
 brew install awscli
 aws configure
 ```
 
-> Credentials must have at minimum read-only access to the target account.
+> AWS chat Q&A uses boto3 with your current credentials — no Prowler needed.
 
 ---
 
 ## Setup
 
 ```bash
-# Clone and enter the project
 git clone <repo-url>
 cd Poc_MCP
-
-# Install Python dependencies
 uv sync
 ```
 
@@ -104,48 +110,50 @@ Uses a pre-captured real scan of 197 Azure CIS findings.
 FIXTURE_MODE=1 uv run python -m backend.app.chat
 ```
 
-### Production mode (real scan)
+### Production mode
 
 ```bash
 uv run python -m backend.app.chat
 ```
 
-Example prompts:
+At startup, choose:
+- `1` — Report wizard: generates a full CIS Markdown report via Prowler
+- `2` — Security chat: ask questions about your AWS or Azure accounts
+
+Example chat questions:
 ```
-Run a CIS security audit on Azure subscription 1e11569b-de29-4e51-ad5e-8f7facd3d07f and report only the failed findings
-Run a CIS security audit on AWS account 123456789012 and report only the failed findings
+¿Tengo buckets S3 públicos?
+¿Cuáles son mis instancias EC2 sin IMDSv2?
+¿Hay usuarios IAM sin MFA?
+¿Mis trails de CloudTrail tienen log validation habilitado?
 ```
 
 Reports are saved to `backend/app/artifacts/reports/`.
 
 ---
 
-## LLM options
+## LLM
 
-The pipeline uses a single LLM instance built in `backend/app/poc_graph.py`. Two options are available — only one should be active at a time.
+### Default — Claude via Anthropic API
 
-### Option A — Local via Ollama (default)
-
-No API key needed. Requires Ollama running with the model pulled.
-
-```python
-# poc_graph.py — already active by default
-llm = ChatOllama(model="qwen2.5-coder:14b", format="json", temperature=0)
-```
-
-### Option B — Claude via Anthropic API
+Used for: report narrative (Doc Agent), report wizard intent, AWS chat Q&A (ReAct agent).
 
 ```bash
-uv add langchain-anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Then in `poc_graph.py`, comment out Option A and uncomment Option B:
+The model is `claude-sonnet-4-6`. No local GPU required.
+
+### Alternative — Local via Ollama
+
+For the report wizard and Azure chat scan, you can swap to Ollama in `backend/app/chat.py` and `backend/app/poc_graph.py`:
 
 ```python
-# llm = ChatOllama(model="qwen2.5-coder:14b", format="json", temperature=0)
-llm = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
+# chat.py / poc_graph.py
+llm = ChatOllama(model="qwen2.5-coder:14b", temperature=0)
 ```
+
+> The ReAct agent for AWS chat always uses Claude — it requires reliable tool-calling.
 
 ---
 
@@ -153,7 +161,7 @@ llm = ChatAnthropic(model="claude-sonnet-4-6", temperature=0)
 
 ```bash
 uv run pytest
-# 183 passed
+# 249 passed
 ```
 
 ---
@@ -163,13 +171,14 @@ uv run pytest
 | Layer | Technology |
 |-------|-----------|
 | Agent orchestration | LangGraph |
-| LLM | qwen2.5-coder:14b via Ollama |
-| MCP layer | FastMCP (bundled in `mcp>=1.27`) |
+| LLM | Claude claude-sonnet-4-6 (Anthropic API) |
+| AWS chat tools | boto3 — direct API calls per domain |
+| MCP layer | FastMCP (`mcp>=1.27`) |
 | Security scanner | Prowler CLI 5.26.1+ |
-| Cloud auth | Azure CLI / AWS CLI |
+| Cloud auth | Azure CLI / AWS CLI / IAM role assume |
 | Data contracts | Pydantic v2 |
 | Reporting | Jinja2 + Markdown |
-| Testing | pytest |
+| Testing | pytest + moto (AWS mocks) |
 | Package manager | uv |
 
 ---
@@ -178,25 +187,48 @@ uv run pytest
 
 ```
 backend/app/
-    chat.py               # terminal entrypoint
-    poc_contracts.py      # shared Pydantic models
-    poc_graph.py          # LangGraph graph
-    agents/               # CIS Agent, Doc Agent
-    services/             # MCPClient, ScanService, ReportStorage
-    normalizers/          # Prowler OCSF → internal schema
-    reporting/            # Jinja2 generator + templates
-    artifacts/            # raw/, normalized/, selected/, reports/
+    chat.py                    # terminal entrypoint — wizard + chat loop
+    poc_contracts.py           # shared Pydantic models
+    poc_graph.py               # LangGraph graph (report flow)
+    agents/
+        cis_agent.py           # interprets scan request, filters findings
+        doc_agent.py           # generates report narrative
+        _llm.py                # shared LLM retry-repair helper
+        react_chat_agent.py    # ReAct agent for AWS chat Q&A
+        security_tools.py      # 6 LangChain tools wrapping boto3 analyzers
+    services/
+        mcp_client.py          # calls MCP Server tools
+        scan_service.py        # agent-facing scan facade
+        report_storage.py      # saves reports to disk
+    normalizers/
+        prowler_normalizer.py  # Prowler OCSF → internal schema
+    reporting/
+        generator.py           # Jinja2 renderer
+        templates/
+            cis_report.md.j2
+            multi_cloud_report.md.j2
+    artifacts/                 # raw/, normalized/, selected/, reports/
 
 MCP_SERVER/
-    server_multicloud.py        # FastMCP server — dispatches by provider
-    tools/azure/prowler.py      # Azure Prowler execution
-    tools/aws/prowler.py        # AWS Prowler execution
-    auth/azure_cli_auth.py
-    auth/aws_cli_auth.py
+    server_multicloud.py       # FastMCP server — 7 tools registered
+    tools/
+        azure/prowler.py       # Azure Prowler execution
+        aws/prowler.py         # AWS Prowler execution
+        aws/iam.py             # IAM boto3 analyzer
+        aws/s3.py              # S3 boto3 analyzer
+        aws/ebs.py             # EBS + Security Groups boto3 analyzer
+        aws/cloudtrail.py      # CloudTrail boto3 analyzer
+        aws/vpc.py             # VPC boto3 analyzer
+        aws/ec2.py             # EC2 boto3 analyzer
+    auth/
+        azure_cli_auth.py
+        aws_cli_auth.py
+        assume_role.py
 
 tests/
-    fixtures/prowler_azure_sample.json  # 197 real Azure CIS findings
-    fixtures/prowler_aws_sample.json    # real AWS CIS findings
+    fixtures/                  # real Prowler scan samples (Azure + AWS)
+    aws/                       # 49 moto-mocked tests for boto3 tools
+    test_*.py                  # report flow tests
 ```
 
 ---
@@ -205,9 +237,7 @@ tests/
 
 | | Fixture mode | Production |
 |-|-------------|------------|
-| Prowler runs | No | Yes |
+| Prowler runs | No | Yes (report wizard + Azure chat) |
 | Cloud credentials | Not needed | Required |
-| LLM (Ollama) | Required | Required |
-| Output | Same pipeline, same report | Same pipeline, same report |
-
-The only difference is whether Prowler calls the cloud provider. Everything else — agents, normalizer, reporting — runs identically.
+| AWS chat (boto3) | Uses real credentials if set | Uses real credentials |
+| LLM | Required (Claude API) | Required (Claude API) |
