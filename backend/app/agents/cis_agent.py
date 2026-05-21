@@ -96,11 +96,19 @@ async def interpret_request(state: dict[str, Any]) -> dict[str, Any]:
         f"\"cloud_account_id\": \"abc-123\", \"fixture_mode\": false, \"fixture_path\": null}}"
     )
 
+    # If the wizard already built a ScanRequest, respect it — skip LLM
+    if state.get("scan_request") is not None:
+        scan_request = state["scan_request"]
+        if fixture_mode and not scan_request.fixture_mode:
+            scan_request = scan_request.model_copy(
+                update={"fixture_mode": True, "fixture_path": fixture_path}
+            )
+        return {**state, "scan_request": scan_request}
+
     try:
-        scan_request: ScanRequest = await call_llm_validated(
+        scan_request = await call_llm_validated(
             llm, prompt, ScanRequest, max_retries=3
         )
-        # Override with env fixture settings if active
         if fixture_mode and not scan_request.fixture_mode:
             scan_request = scan_request.model_copy(
                 update={"fixture_mode": True, "fixture_path": fixture_path}
@@ -130,6 +138,10 @@ async def build_policy(state: dict[str, Any]) -> dict[str, Any]:
 
     if scan_request is None:
         return {**state, "error": "build_policy: scan_request is not set"}
+
+    # If the wizard already built a ReportPolicy, respect it — skip LLM
+    if state.get("report_policy") is not None:
+        return state
 
     prompt = (
         f"Create a security report policy for the following scan request.\n"
