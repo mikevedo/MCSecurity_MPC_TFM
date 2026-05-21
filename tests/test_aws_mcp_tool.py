@@ -125,8 +125,8 @@ class TestRunProwlerScanReturnCodes:
         assert "--output-formats" in captured_cmd
         assert "json-ocsf" in captured_cmd
 
-    def test_live_mode_includes_aws_account_id_when_provided(self, monkeypatch):
-        """When cloud_account_id is non-empty, --aws-account-id must appear in cmd."""
+    def test_live_mode_never_includes_aws_account_id_flag(self, monkeypatch):
+        """--aws-account-id is not a valid Prowler AWS flag — must never appear in cmd."""
         monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
 
         captured_cmd = []
@@ -142,29 +142,6 @@ class TestRunProwlerScanReturnCodes:
 
             aws_prowler_mod.run_prowler_scan(
                 cloud_account_id="123456789012",
-                benchmark="cis_aws_foundations_benchmark_v3.0",
-            )
-
-        assert "--aws-account-id" in captured_cmd
-        assert "123456789012" in captured_cmd
-
-    def test_live_mode_omits_aws_account_id_when_empty(self, monkeypatch):
-        """When cloud_account_id is empty, --aws-account-id must NOT appear in cmd."""
-        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
-
-        captured_cmd = []
-
-        def fake_run(cmd, **kwargs):
-            captured_cmd.extend(cmd)
-            return self._make_completed_process(0, "[]")
-
-        with patch("subprocess.run", side_effect=fake_run):
-            import importlib
-            import MCP_SERVER.tools.aws.prowler as aws_prowler_mod
-            importlib.reload(aws_prowler_mod)
-
-            aws_prowler_mod.run_prowler_scan(
-                cloud_account_id="",
                 benchmark="cis_aws_foundations_benchmark_v3.0",
             )
 
@@ -478,3 +455,78 @@ class TestAssumeRoleInjectedIntoSubprocess:
         assert result["status"] == "error"
         assert "AssumeRole" in result["error"]
         mock_run.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Severity filter and only_failed flag — AWS tool
+# ---------------------------------------------------------------------------
+
+class TestSeverityAndStatusFlagsAws:
+    """--severity and --status FAIL must be injected into the AWS Prowler subprocess command."""
+
+    def _make_proc(self, returncode: int = 0, stdout: str = "[]") -> MagicMock:
+        proc = MagicMock()
+        proc.returncode = returncode
+        proc.stdout = stdout
+        proc.stderr = ""
+        return proc
+
+    def test_severity_filter_added_to_cmd(self, monkeypatch):
+        """severity_filter=['critical','high'] → --severity critical high in cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("MCP_SERVER.auth.aws_cli_auth.get_credentials_for_scan", return_value={}), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.aws.prowler as aws_prowler_mod
+            importlib.reload(aws_prowler_mod)
+
+            aws_prowler_mod.run_prowler_scan(
+                cloud_account_id="123456789012",
+                severity_filter=["critical", "high"],
+            )
+
+        cmd = mock_run.call_args[0][0]
+        assert "--severity" in cmd
+        sev_idx = cmd.index("--severity")
+        assert cmd[sev_idx + 1] == "critical"
+        assert cmd[sev_idx + 2] == "high"
+
+    def test_only_failed_adds_status_fail(self, monkeypatch):
+        """only_failed=True → --status FAIL in cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("MCP_SERVER.auth.aws_cli_auth.get_credentials_for_scan", return_value={}), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.aws.prowler as aws_prowler_mod
+            importlib.reload(aws_prowler_mod)
+
+            aws_prowler_mod.run_prowler_scan(
+                cloud_account_id="123456789012",
+                only_failed=True,
+            )
+
+        cmd = mock_run.call_args[0][0]
+        assert "--status" in cmd
+        status_idx = cmd.index("--status")
+        assert cmd[status_idx + 1] == "FAIL"
+
+    def test_no_severity_filter_omits_flag(self, monkeypatch):
+        """Default severity_filter=[] → --severity must NOT appear in cmd."""
+        monkeypatch.delenv("PROWLER_FIXTURE_MODE", raising=False)
+
+        with patch("MCP_SERVER.auth.aws_cli_auth.get_credentials_for_scan", return_value={}), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = self._make_proc()
+            import importlib
+            import MCP_SERVER.tools.aws.prowler as aws_prowler_mod
+            importlib.reload(aws_prowler_mod)
+
+            aws_prowler_mod.run_prowler_scan(cloud_account_id="123456789012")
+
+        cmd = mock_run.call_args[0][0]
+        assert "--severity" not in cmd
+        assert "--status" not in cmd

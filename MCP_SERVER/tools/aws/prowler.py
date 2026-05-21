@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -144,6 +145,14 @@ def _run_live_mode(
     benchmark: str,
     output_format: str,
     role_arn: str = "",
+    services: list[str] | None = None,
+    checks: list[str] | None = None,
+    severity_filter: list[str] | None = None,
+    only_failed: bool = False,
+    aws_region: str | None = None,
+    excluded_checks: list[str] | None = None,
+    categories: list[str] | None = None,
+    mutelist_file: str | None = None,
 ) -> dict[str, Any]:
     """Run Prowler CLI via subprocess for AWS and return structured result."""
     started_at = _now_iso()
@@ -153,97 +162,114 @@ def _run_live_mode(
     except RuntimeError as exc:
         return _error_dict(f"AssumeRole failed: {exc}")
 
-    cmd = [
-        "prowler",
-        "aws",
-        "--compliance",
-        benchmark,
-        "--output-formats",
-        output_format,
-        "--output-filename",
-        "/dev/stdout",  # send output to stdout for capture
-    ]
-    if cloud_account_id:
-        cmd += ["--aws-account-id", cloud_account_id]
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        scan_id = os.urandom(8).hex()
+        cmd = [
+            "prowler",
+            "aws",
+            "--output-formats",
+            output_format,
+            "--output-directory",
+            tmp_dir,
+            "--output-filename",
+            scan_id,
+        ]
+        if checks:
+            # --checks mode: --compliance, --category, --excluded-checks are incompatible
+            cmd += ["--checks"] + checks
+        else:
+            cmd += ["--compliance", benchmark]
+            if excluded_checks:
+                cmd += ["--excluded-checks"] + excluded_checks
+            # --category is incompatible with --compliance in Prowler CLI — omitted
+        if severity_filter:
+            cmd += ["--severity"] + severity_filter
+        if only_failed:
+            cmd += ["--status", "FAIL"]
+        if aws_region:
+            cmd += ["--region", aws_region]
+        if mutelist_file:
+            cmd += ["--mutelist-file", mutelist_file]
 
-    subprocess_env = {**os.environ, **creds_env} if creds_env else None
+        subprocess_env = {**os.environ, **creds_env} if creds_env else None
 
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=PROWLER_TIMEOUT,
-            check=False,
-            env=subprocess_env,
-        )
-        finished_at = _now_iso()
-        returncode = proc.returncode
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=PROWLER_TIMEOUT,
+                check=False,
+                env=subprocess_env,
+            )
+            finished_at = _now_iso()
+            returncode = proc.returncode
 
-        if returncode not in SUCCESS_RETURNCODES:
-            error_detail = proc.stderr.strip() or f"Prowler exited with code {returncode}"
+            if returncode not in SUCCESS_RETURNCODES:
+                error_detail = proc.stderr.strip() or f"Prowler exited with code {returncode}"
+                return {
+                    "status": "error",
+                    "findings": [],
+                    "error": error_detail,
+                    "prowler_version": None,
+                    "returncode": returncode,
+                    "started_at": started_at,
+                    "finished_at": finished_at,
+                    "fixture_mode": False,
+                }
+
+            # Read findings from temp file (extension depends on output_format)
+            ext = "ocsf.json" if output_format == "json-ocsf" else f"{output_format}.json"
+            output_file = Path(tmp_dir) / f"{scan_id}.{ext}"
+            try:
+                findings = json.loads(output_file.read_text(encoding="utf-8")) if output_file.exists() else []
+            except json.JSONDecodeError:
+                findings = []
+
             return {
-                "status": "error",
-                "findings": [],
-                "error": error_detail,
-                "prowler_version": None,
+                "status": "success",
+                "findings": findings,
+                "error": None,
+                "prowler_version": _extract_prowler_version(findings),
                 "returncode": returncode,
                 "started_at": started_at,
                 "finished_at": finished_at,
                 "fixture_mode": False,
             }
 
-        # Parse findings from stdout
-        try:
-            findings = json.loads(proc.stdout) if proc.stdout.strip() else []
-        except json.JSONDecodeError:
-            # Prowler may write partial/non-JSON to stdout on some versions
-            findings = []
-
-        return {
-            "status": "success",
-            "findings": findings,
-            "error": None,
-            "prowler_version": _extract_prowler_version(findings),
-            "returncode": returncode,
-            "started_at": started_at,
-            "finished_at": finished_at,
-            "fixture_mode": False,
-        }
-
-    except subprocess.TimeoutExpired:
-        return {
-            "status": "error",
-            "findings": [],
-            "error": f"prowler scan timeout: exceeded {PROWLER_TIMEOUT} seconds",
-            "prowler_version": None,
-            "returncode": None,
-            "started_at": started_at,
-            "finished_at": _now_iso(),
-            "fixture_mode": False,
-        }
-    except FileNotFoundError:
-        return {
-            "status": "error",
-            "findings": [],
-            "error": "Prowler CLI not found on PATH. Install prowler or use fixture mode.",
-            "prowler_version": None,
-            "returncode": None,
-            "started_at": started_at,
-            "finished_at": _now_iso(),
-            "fixture_mode": False,
-        }
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "status": "error",
-            "findings": [],
-            "error": f"Unexpected error running Prowler: {exc}",
-            "prowler_version": None,
-            "returncode": None,
-            "started_at": started_at,
-            "finished_at": _now_iso(),
-            "fixture_mode": False,
-        }
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "error",
+                "findings": [],
+                "error": f"prowler scan timeout: exceeded {PROWLER_TIMEOUT} seconds",
+                "prowler_version": None,
+                "returncode": None,
+                "started_at": started_at,
+                "finished_at": _now_iso(),
+                "fixture_mode": False,
+            }
+        except FileNotFoundError:
+            return {
+                "status": "error",
+                "findings": [],
+                "error": "Prowler CLI not found on PATH. Install prowler or use fixture mode.",
+                "prowler_version": None,
+                "returncode": None,
+                "started_at": started_at,
+                "finished_at": _now_iso(),
+                "fixture_mode": False,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "status": "error",
+                "findings": [],
+                "error": f"Unexpected error running Prowler: {exc}",
+                "prowler_version": None,
+                "returncode": None,
+                "started_at": started_at,
+                "finished_at": _now_iso(),
+                "fixture_mode": False,
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +282,14 @@ def run_prowler_scan(
     benchmark: str = "cis_aws_foundations_benchmark_v3.0",
     output_format: str = "json-ocsf",
     role_arn: str = "",
+    services: list[str] | None = None,
+    checks: list[str] | None = None,
+    severity_filter: list[str] | None = None,
+    only_failed: bool = False,
+    aws_region: str | None = None,
+    excluded_checks: list[str] | None = None,
+    categories: list[str] | None = None,
+    mutelist_file: str | None = None,
 ) -> dict[str, Any]:
     """
     Execute a Prowler security scan against an AWS account and return a structured result.
@@ -272,6 +306,9 @@ def run_prowler_scan(
         output_format: Prowler output format (default: json-ocsf).
         role_arn: IAM role ARN to assume before scanning. When empty, Prowler uses
                   the ambient AWS credentials from the environment.
+        checks: Optional Prowler --checks filter. When set, overrides services.
+        severity_filter: Optional --severity filter (e.g. ['critical', 'high']).
+        only_failed: When True, passes --status FAIL to exclude PASS findings at source.
 
     Returns:
         dict with keys: status, findings, error, prowler_version, returncode,
@@ -288,4 +325,12 @@ def run_prowler_scan(
         benchmark=benchmark,
         output_format=output_format,
         role_arn=role_arn,
+        services=services,
+        checks=checks,
+        severity_filter=severity_filter,
+        only_failed=only_failed,
+        aws_region=aws_region,
+        excluded_checks=excluded_checks,
+        categories=categories,
+        mutelist_file=mutelist_file,
     )
