@@ -174,14 +174,17 @@ def _run_live_mode(
             "--output-filename",
             scan_id,
         ]
+        if cloud_account_id:
+            cmd += ["--account", cloud_account_id]
         if checks:
-            # --checks mode: --compliance, --category, --excluded-checks are incompatible
+            # --checks mode: --compliance, --service, --excluded-checks are incompatible
             cmd += ["--checks"] + checks
         else:
             cmd += ["--compliance", benchmark]
+            if services:
+                cmd += ["--service"] + services
             if excluded_checks:
                 cmd += ["--excluded-checks"] + excluded_checks
-            # --category is incompatible with --compliance in Prowler CLI — omitted
         if severity_filter:
             cmd += ["--severity"] + severity_filter
         if only_failed:
@@ -196,7 +199,8 @@ def _run_live_mode(
         try:
             proc = subprocess.run(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
                 timeout=PROWLER_TIMEOUT,
                 check=False,
@@ -279,7 +283,7 @@ def _run_live_mode(
 
 def run_prowler_scan(
     cloud_account_id: str = "",
-    benchmark: str = "cis_aws_foundations_benchmark_v3.0",
+    benchmark: str = "cis_3.0_aws",
     output_format: str = "json-ocsf",
     role_arn: str = "",
     services: list[str] | None = None,
